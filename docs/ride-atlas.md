@@ -16,6 +16,8 @@ Average speed is distance divided by moving time. The aggregate uses total dista
 
 Routes are sampled at approximately 35 m spacing and rounded to 5 decimal places. GPS gaps and obvious jumps become separate line segments. Profiles are sampled to at most 200 points. The full source files remain unchanged. Routes are for exploration rather than turn-by-turn navigation or scientific telemetry analysis. Initial map view focuses around the most recent ride; the expand control fits every selected route, including rides on other continents.
 
+The light interface uses a desaturated, low-contrast map base. Routes have saturated blue strokes and white outlines in separate Leaflet panes so overlapping outlines never obscure other route colors. Selecting a ride highlights it in orange above the other routes and dims the background routes; closing details restores the overview. Year colors remain saturated and readable against the light base.
+
 ## Data & Files
 
 - `scripts/import_rides.py`: import CLI; fails on invalid tracks without replacing existing output.
@@ -23,7 +25,7 @@ Routes are sampled at approximately 35 m spacing and rounded to 5 decimal places
 - Each ride: stable ID, source SHA256, ISO date, title, kilometers, moving/elapsed seconds, ascent meters, average/max km/h, optional average HR/power, bike, source format, route segments `[lat, lon]`, elevation profile `[km, meters]`.
 - `src/stats.js`: pure statistics, formatting, selection and HTML escaping.
 - `src/main.js`: dashboard, map, charts, journal and events.
-- `src/style.css`: responsive dark theme.
+- `src/style.css`: responsive light theme and muted map base.
 - `export_*/`, `data/raw/`, original FIT/GPX/TCX and virtual environment are ignored.
 
 ## Interfaces (CLI/API)

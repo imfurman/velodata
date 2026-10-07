@@ -10,7 +10,9 @@ const paintIcons = () => createIcons({ icons, attrs: { 'stroke-width': 1.6 } });
 const app = document.querySelector('#app');
 const state = { year: '', search: '', selected: null, colorByYear: false, page: 1 };
 let rides = [], map, routesLayer, activeLayer, firstView = true;
-const colors = ['#b7f04b', '#68cfdf', '#d6a3f5', '#ffb570'];
+const colors = ['#08765c', '#0868cf', '#824ac0', '#b66b0c'];
+const routeColor = '#0868cf';
+const selectedRouteColor = '#d44717';
 
 async function init() {
   const response = await fetch(`${import.meta.env.BASE_URL}data/rides.json`);
@@ -46,8 +48,15 @@ async function init() {
       <footer><a class="footer-brand" href="#overview">velo<span>data.</span></a><span>Каждый километр имеет значение.</span><span>FIT · GPX · TCX</span></footer>
     </main>`;
   map = L.map('map', { zoomControl: false, preferCanvas: true, scrollWheelZoom: false }).setView([42.1, 27.5], 8);
+  // Separate panes keep every white outline below the colored routes at crossings.
+  ['ride-outlines', 'ride-routes', 'selected-outline', 'selected-route'].forEach((name, index) => {
+    map.createPane(name).style.zIndex = 410 + index * 10;
+  });
+  map.getPane('ride-outlines').style.pointerEvents = 'none';
+  map.getPane('selected-outline').style.pointerEvents = 'none';
+  map.getPane('selected-route').style.pointerEvents = 'none';
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19, className: 'map-tiles' }).addTo(map);
+  const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19, opacity: .42, className: 'map-tiles' }).addTo(map);
   let failures = 0;
   tiles.on('tileerror', () => { if (++failures > 3) document.querySelector('#map-error').hidden = false; });
   tiles.on('tileload', () => { document.querySelector('#map-error').hidden = true; failures = 0; });
@@ -86,12 +95,13 @@ function renderMap(fit) {
   const filtered = currentRides();
   filtered.forEach(r => {
     if (!r.route.length) return;
-    const line = L.polyline(r.route, { color: state.colorByYear ? colors[Number(r.date.slice(0, 4)) % colors.length] : '#b7f04b', weight: 2, opacity: .47, smoothFactor: 1.2 });
+    routesLayer.addLayer(L.polyline(r.route, { pane: 'ride-outlines', color: '#ffffff', weight: 6.5, opacity: .9, interactive: false, smoothFactor: 1.2 }));
+    const line = L.polyline(r.route, { pane: 'ride-routes', color: state.colorByYear ? colors[Number(r.date.slice(0, 4)) % colors.length] : routeColor, weight: 3.2, opacity: .85, smoothFactor: 1.2 });
     const tooltip = document.createElement('span'); tooltip.textContent = `${r.title} · ${n(r.distanceKm, 1)} км`;
     line.bindTooltip(tooltip, { sticky: true }); line.on('click', () => selectRide(r.id)); routesLayer.addLayer(line);
   });
   document.querySelector('#map-count').innerHTML = `${icon('route')}${filtered.filter(r => r.route.length).length} маршрутов на карте`;
-  document.querySelector('#map-legend').innerHTML = state.colorByYear ? [...new Set(filtered.map(r => r.date.slice(0,4)))].sort().map(y=>`<span style="color:${colors[Number(y)%4]}">${y}</span>`).join(' · ') : 'Мои маршруты';
+  updateRouteEmphasis();
   if (fit) {
     if (firstView && filtered.find(r => r.route.length)) {
       map.fitBounds(L.polyline(filtered.find(r => r.route.length).route).getBounds().pad(.4), { maxZoom: 12 });
@@ -102,12 +112,28 @@ function renderMap(fit) {
 }
 
 function selectRide(id) { state.selected = id; renderDetail(); document.querySelector('#atlas').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function updateRouteEmphasis() {
+  const selected = Boolean(state.selected);
+  routesLayer.eachLayer(layer => {
+    const outline = layer.options.pane === 'ride-outlines';
+    layer.setStyle({ opacity: selected ? (outline ? .45 : .2) : (outline ? .9 : .85) });
+  });
+  document.querySelector('.legend-line').style.background = selected ? selectedRouteColor : routeColor;
+  document.querySelector('#map-legend').innerHTML = selected ? 'Выбранная поездка' : state.colorByYear
+    ? [...new Set(currentRides().map(r => r.date.slice(0,4)))].sort().map(y=>`<span style="color:${colors[Number(y)%4]}">${y}</span>`).join(' · ')
+    : 'Мои маршруты';
+}
 function renderDetail() {
   activeLayer.clearLayers();
   const element = document.querySelector('#ride-detail'), r = rides.find(r => r.id === state.selected);
   element.hidden = !r;
+  updateRouteEmphasis();
   if (!r) return;
-  if (r.route.length) { activeLayer.addLayer(L.polyline(r.route, { color: '#ffb570', weight: 4, opacity: 1 })); map.fitBounds(activeLayer.getBounds(), { padding: [50, 60], maxZoom: 15 }); }
+  if (r.route.length) {
+    activeLayer.addLayer(L.polyline(r.route, { pane: 'selected-outline', color: '#ffffff', weight: 9, opacity: 1, interactive: false }));
+    activeLayer.addLayer(L.polyline(r.route, { pane: 'selected-route', color: selectedRouteColor, weight: 5, opacity: 1, interactive: false }));
+    map.fitBounds(activeLayer.getBounds(), { padding: [50, 60], maxZoom: 15 });
+  }
   element.innerHTML = `<div class="section-heading"><div><span class="eyebrow">${formatDate(r.date, {year:'numeric'})} · ${r.source.toUpperCase()}</span><h2>${esc(r.title)}</h2></div><button id="close-detail" class="icon-button" aria-label="Закрыть подробности">${icon('x')}</button></div><div class="detail-grid"><div class="detail-facts"><div><span>Дистанция</span><strong>${n(r.distanceKm, 1)} км</strong></div><div><span>В движении</span><strong>${duration(r.movingSeconds)}</strong></div><div><span>Набор высоты</span><strong>${n(r.elevationM)} м</strong></div><div><span>Средняя скорость</span><strong>${r.avgSpeed === null ? '—' : n(r.avgSpeed, 1)+' км/ч'}</strong></div><div><span>Время с остановками</span><strong>${duration(r.elapsedSeconds)}</strong></div><div><span>Велосипед</span><strong>${esc(r.bike || 'Не указан')}</strong></div></div><div class="elevation"><span class="eyebrow">ПРОФИЛЬ ВЫСОТЫ</span>${elevationChart(r.profile)}${!r.route.length ? '<p>В этой поездке нет GPS-трека.</p>':''}</div></div>`;
   document.querySelector('#close-detail').addEventListener('click', () => { state.selected = null; renderDetail(); fitMap(); }); paintIcons();
 }
@@ -116,7 +142,7 @@ function elevationChart(points) {
   if (points.length < 2) return '<p class="empty">Нет данных о высоте.</p>';
   const maxX = Math.max(...points.map(p=>p[0]), 1), min = Math.min(...points.map(p=>p[1])), max = Math.max(...points.map(p=>p[1]), min+1);
   const line = points.map(([x,y])=>`${20+x/maxX*560},${145-(y-min)/(max-min)*115}`).join(' ');
-  return `<svg viewBox="0 0 600 180" role="img" aria-label="Профиль высоты: от ${n(min)} до ${n(max)} метров"><defs><linearGradient id="elevation-fill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#b7f04b" stop-opacity=".35"/><stop offset="1" stop-color="#b7f04b" stop-opacity="0"/></linearGradient></defs><path d="M20 150 L${line.replaceAll(' ', ' L')} L580 150Z" fill="url(#elevation-fill)"/><polyline points="${line}" fill="none" stroke="#b7f04b" stroke-width="2"/><text x="20" y="16">${n(max)} м</text><text x="20" y="173">0 км</text><text x="580" y="173" text-anchor="end">${n(maxX,1)} км</text></svg>`;
+  return `<svg viewBox="0 0 600 180" role="img" aria-label="Профиль высоты: от ${n(min)} до ${n(max)} метров"><defs><linearGradient id="elevation-fill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#176aca" stop-opacity=".35"/><stop offset="1" stop-color="#176aca" stop-opacity="0"/></linearGradient></defs><path d="M20 150 L${line.replaceAll(' ', ' L')} L580 150Z" fill="url(#elevation-fill)"/><polyline points="${line}" fill="none" stroke="#176aca" stroke-width="2"/><text x="20" y="16">${n(max)} м</text><text x="20" y="173">0 км</text><text x="580" y="173" text-anchor="end">${n(maxX,1)} км</text></svg>`;
 }
 
 function renderInsights() {
