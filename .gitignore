@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+.DS_Store
+export_*/
+data/raw/
+*.fit
+*.fit.gz
+*.tcx
+*.tcx.gz
+*.gpx
+.env*
+!.env.example
+.codebase-memory/
+.sites-runtime/
+test-results/
