@@ -324,3 +324,6 @@ button.day:hover{outline:1px solid #174f8e;outline-offset:2px}
 .bars{gap:7px}
 .records-card,.chart-card{min-width:0}
 }
+@media(max-width:480px){
+  .bar-column:nth-child(even) .bar-month{visibility:hidden}
+}
